@@ -44,4 +44,8 @@ package() {
 
     # Config (user-editable variables). backup=() keeps it across reinstalls.
     install -Dm644 systemd/wiki-calendar.env "${pkgdir}/etc/wiki-calendar.env"
+
+    # Org-mode import template (for `wiki-calendar copy-org-template`).
+    install -Dm644 org/calendar.org.example \
+        "${pkgdir}/usr/share/wiki-calendar/org/calendar.org.example"
 }

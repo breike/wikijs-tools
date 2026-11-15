@@ -36,6 +36,8 @@ src_install() {
 	newins systemd/wiki-calendar.env wiki-calendar.env
 	newinitd "${FILESDIR}"/wiki-calendar.initd wiki-calendar
 	newconfd "${FILESDIR}"/wiki-calendar.confd wiki-calendar
+	insinto /usr/share/wiki-calendar/org
+	newins org/calendar.org.example calendar.org.example
 	dodoc README.md
 }
 
