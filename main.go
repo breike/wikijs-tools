@@ -386,25 +386,66 @@ func buildWeekContent() (string, string) {
 	return md, html
 }
 
-// updateWeekHighlight обновляет на существующей странице недели выделение
-// текущего часа и дня недели: скачивает контент, меняет только обёртки
-// ==**...**== вокруг меток в таблице, пользовательские записи сохраняет.
-// Возвращает true, если контент изменился и страница обновлена.
-func updateWeekHighlight(siteID, path string, page map[string]any, today time.Time) (bool, error) {
-	current, _ := page["content"].(string)
-	if current == "" && page["content"] == nil {
-		if cfg.Verbose {
-			fmt.Printf("[%s] %s: исходник недоступен (нет права), пропуск\n", time.Now().Format("15:04:05"), path)
-		}
-		return false, nil
-	}
-	updated := applyWeekHighlight(current, today)
-	if updated == current {
+// weekTitle — целевой заголовок страницы недели: "Неделя <номер> (<ISO-год>)".
+func weekTitle(isoYear, iso int) string {
+	return fmt.Sprintf("Неделя %d (%d)", iso, isoYear)
+}
+
+// patchWeekTitle обновляет на существующей странице недели заголовок, если он
+// устарел (например, создан старым кодом как "Неделя <номер>" без года).
+// Трогает только title, контент не меняется. Возвращает true, если PATCH сделан.
+func patchWeekTitle(siteID, path string, page map[string]any, isoYear, iso int) (bool, error) {
+	want := weekTitle(isoYear, iso)
+	cur, _ := page["title"].(string)
+	if cur == want {
 		return false, nil
 	}
 	pageID, _ := page["id"].(string)
 	if pageID == "" {
 		return false, errors.New("страница есть, но без id")
+	}
+	body := map[string]any{
+		"title": want,
+	}
+	if _, err := api("PATCH", fmt.Sprintf("/sites/%s/pages/%s", siteID, pageID), body); err != nil {
+		return false, fmt.Errorf("PATCH заголовка %s: %w", path, err)
+	}
+	if cfg.Verbose {
+		fmt.Printf("[%s] Заголовок %s -> %s\n", time.Now().Format("15:04:05"), path, want)
+	}
+	return true, nil
+}
+
+// updateWeekHighlight обновляет на существующей странице недели выделение
+// текущего часа и дня недели: скачивает контент, меняет только обёртки
+// ==**...**== вокруг меток в таблице, пользовательские записи сохраняет.
+// Заодно приводит заголовок к актуальному. Возвращает true, если страница
+// обновлена (контент или заголовок).
+func updateWeekHighlight(siteID, path string, page map[string]any, isoYear, iso int, today time.Time) (bool, error) {
+	pageID, _ := page["id"].(string)
+	if pageID == "" {
+		return false, errors.New("страница есть, но без id")
+	}
+	touched := false
+
+	// -> Заголовок
+	if t, err := patchWeekTitle(siteID, path, page, isoYear, iso); err != nil {
+		return false, err
+	} else if t {
+		touched = true
+	}
+
+	// -> Выделение часа/дня
+	current, _ := page["content"].(string)
+	if current == "" && page["content"] == nil {
+		if cfg.Verbose {
+			fmt.Printf("[%s] %s: исходник недоступен (нет права), пропуск\n", time.Now().Format("15:04:05"), path)
+		}
+		return touched, nil
+	}
+	updated := applyWeekHighlight(current, today)
+	if updated == current {
+		return touched, nil
 	}
 	body := map[string]any{
 		"content": updated,
@@ -449,7 +490,7 @@ func ensureWeekPages(siteID string, year int) (int, error) {
 			}
 			body := map[string]any{
 				"path":    path,
-				"title":   fmt.Sprintf("Неделя %d (%d)", iso, isoYear),
+				"title":   weekTitle(isoYear, iso),
 				"editor":  "markdown",
 				"content": md,
 				"render":  html,
@@ -465,9 +506,11 @@ func ensureWeekPages(siteID string, year int) (int, error) {
 				fmt.Printf("[%s] Создана страница %s\n", time.Now().Format("15:04:05"), path)
 			}
 		} else if isCurrentWeek {
-			if _, err := updateWeekHighlight(siteID, path, page, time.Now()); err != nil {
+			if _, err := updateWeekHighlight(siteID, path, page, isoYear, iso, time.Now()); err != nil {
 				return created, err
 			}
+		} else if _, err := patchWeekTitle(siteID, path, page, isoYear, iso); err != nil {
+			return created, err
 		}
 		monday = monday.AddDate(0, 0, 7)
 	}

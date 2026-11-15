@@ -119,3 +119,13 @@ func TestWeekHighlightMissingRow(t *testing.T) {
 		t.Fatalf("запись потеряна:\n%s", got)
 	}
 }
+
+func TestWeekTitle(t *testing.T) {
+	if got := weekTitle(2026, 46); got != "Неделя 46 (2026)" {
+		t.Fatalf("weekTitle(2026,46) = %q", got)
+	}
+	// Граница года: неделя 1 января 2026 принадлежит ISO-2025 (52-я неделя).
+	if got := weekTitle(2025, 52); got != "Неделя 52 (2025)" {
+		t.Fatalf("weekTitle(2025,52) = %q", got)
+	}
+}
