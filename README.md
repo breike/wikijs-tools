@@ -15,11 +15,19 @@ grid `00:00`–`23:00` across Monday–Sunday.
 - **Today is highlighted** — `==**15**==` in markdown, `<mark><strong>15</strong></mark>` in HTML.
 - **Per-week pages** — `cal-<year>-week-<week>` with an hourly grid (`00:00`–`23:00`),
   created automatically for all weeks of the year (52–53).
+- **Current hour is highlighted** — the hour row in the week table is marked with
+  `==**HH:00**==` (markdown) / `<mark><strong>HH:00</strong></mark>` (HTML). The highlight
+  follows the clock: when the hour changes, the service fetches the page, moves the
+  highlight to the new row and leaves all your notes in the table untouched.
+- **Notes are preserved** — if you have edited a week page (added tasks, meetings, etc.),
+  the service only toggles the `==**...**==` marker on the *time column*; everything else
+  in the content is left exactly as you wrote it. Nothing is overwritten.
 - **Links in the week column** — every week number in the yearly calendar links to its
   week page. The year in the link is the *ISO year*, so boundary weeks (e.g. the first
   January week that belongs to the previous ISO year) point at the right page.
-- **Idempotent** — only writes when the *content* actually changed (when "today" moves),
-  so it does not spam page history with a new version every minute.
+- **Idempotent** — only writes when the *content* actually changed (when "today" moves
+  or the highlight hour moves), so it does not spam page history with a new version
+  every minute.
 - **Auto-rollover** — when the year changes, it starts maintaining `cal-<new-year>` and
   stops touching the old one automatically.
 - **Works in the background** — polls every `REFRESH_INTERVAL_S` seconds (60 by default),
