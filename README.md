@@ -175,8 +175,13 @@ WIKI_HOST=https://wiki.example.com WIKI_TOKEN=... ./wiki-calendar   # built bina
 ```
 
 The tool loops forever; run it under `nohup`, a terminal multiplexer, or a supervisor
-of your choice. `systemd/install.sh` automates building to `/usr/bin` + systemd unit
-install (for OpenRC, see the Gentoo section).
+of your choice.
+
+> `systemd/install.sh` is an **alternative** to the Arch PKGBUILD for manual
+> installs: it builds to `/usr/bin` and installs the unit to the **same** location
+> as the package (`/usr/lib/systemd/system/`). Do not run both — a leftover unit
+> in `/etc/systemd/system/` (from an older install.sh) **overrides** the packaged
+> one and silently survives package upgrades.
 
 ## Development
 

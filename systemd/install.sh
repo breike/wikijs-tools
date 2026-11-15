@@ -6,7 +6,9 @@
 #
 # Что делает:
 #   1) собирает бинарник wiki-calendar и кладёт в /usr/bin/wiki-calendar
-#   2) копирует юнит в /etc/systemd/system/wiki-calendar.service
+#   2) копирует юнит в /usr/lib/systemd/system/wiki-calendar.service
+#      (тот же путь, что использует PKGBUILD — чтобы не было двух копий,
+#      где /etc/systemd/system перекрывает пакетный файл)
 #   3) создаёт /etc/wiki-calendar.env с дефолтными переменными (существующий
 #      конфиг НЕ перезаписывается — свои значения сохранятся)
 #   4) включает и запускает сервис
@@ -17,12 +19,12 @@ set -euo pipefail
 BIN_NAME="wiki-calendar"
 BIN_DEST="/usr/bin/${BIN_NAME}"
 UNIT_SRC="$(dirname "$0")/wiki-calendar.service"
-UNIT_DEST="/etc/systemd/system/${BIN_NAME}.service"
+UNIT_DEST="/usr/lib/systemd/system/${BIN_NAME}.service"
 ENV_SRC="$(dirname "$0")/wiki-calendar.env"
 ENV_DEST="/etc/${BIN_NAME}.env"
 
 if [[ "$(id -u)" -ne 0 ]]; then
-    echo "Ошибка: запусти с sudo (нужны права root для /usr/bin и /etc/systemd)." >&2
+    echo "Ошибка: запусти с sudo (нужны права root для /usr/bin и /usr/lib/systemd)." >&2
     exit 1
 fi
 
