@@ -1,0 +1,3 @@
+# Собранный бинарник (install.sh кладёт его в /usr/local/bin, но при локальной
+# сборке go build -o wiki-calendar остаётся файл и в проекте)
+/wiki-calendar

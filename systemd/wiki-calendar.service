@@ -1,0 +1,34 @@
+[Unit]
+Description=Wiki.js calendar publisher (cal-<year>, cal-<year>-week-<week>)
+Documentation=https://docs.js.wiki/dev/api
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Путь к собранному бинарнику (см. install.sh)
+ExecStart=/usr/local/bin/wiki-calendar
+
+# --- Переменные: отредактируй здесь ---
+Environment=WIKI_HOST=https://wiki.example.com
+Environment=WIKI_TOKEN=PASTE_YOUR_TOKEN_HERE
+# Как часто проверять (секунды); пишет только при изменении контента
+Environment=WIKI_REFRESH_INTERVAL_S=60
+# UUID сайта; если пусто — определяется из GET /_api/bootstrap
+Environment=WIKI_SITE_ID=
+# Локали по умолчанию; пусто = локали по умолчанию сайта
+Environment=WIKI_LOCALE=
+# Логировать действия (1/0)
+Environment=WIKI_VERBOSE=1
+
+# Перезапуск при сбое, с задержкой
+Restart=on-failure
+RestartSec=10
+
+# Логи — в journald (journalctl -u wiki-calendar)
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
