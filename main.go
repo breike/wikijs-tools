@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -303,9 +304,16 @@ func weekHourHighlight(label string) string {
 	return fmt.Sprintf("==**%s**==", label)
 }
 
-// hourLabel — время текущего часа в формате "HH:00".
+// hourLabel — время текущего часа в формате "ЧЧ:00".
 func hourLabel(t time.Time) string {
 	return fmt.Sprintf("%02d:00", t.Hour())
+}
+
+// timeLabel — текущее время в формате "ЧЧ:ММ" (например "14:30").
+// Используется в пересобранной таблице (rebuildWeekTable), где могут быть
+// кастомные строки с минутами.
+func timeLabel(t time.Time) string {
+	return fmt.Sprintf("%02d:%02d", t.Hour(), t.Minute())
 }
 
 // weekdayIndex — индекс сегодняшнего дня в [7]string{Пн..Вс} (0 = Пн, 6 = Вс).
@@ -314,11 +322,17 @@ func weekdayIndex(t time.Time) int {
 }
 
 // applyWeekHighlight применяет к markdown-сетке недели выделение текущего
-// часа (первая колонка строки "| HH:00 |") и текущего дня недели (заголовок
+// времени (первая колонка строки "| ЧЧ:ММ |") и текущего дня недели (заголовок
 // колонки "| Время | Пн | ... |"). Прежние ==**...**== с тех же мест убираются.
 // Пользовательские записи в ячейках таблицы не трогаются.
-func applyWeekHighlight(md string, today time.Time) string {
-	curHour := hourLabel(today)
+// Параметр targetTime — метка, которую выделять; если не задан (""), берётся
+// текущий ровный час "ЧЧ:00" (сетка из buildWeekContent содержит только ровные
+// часы). rebuildWeekTable передаёт точное время "ЧЧ:ММ", чтобы подсветить
+// кастомную строку.
+func applyWeekHighlight(md string, today time.Time, targetTime string) string {
+	if targetTime == "" {
+		targetTime = hourLabel(today) // "ЧЧ:00" — сетка из buildWeekContent содержит только ровные часы
+	}
 	curDow := weekdayIndex(today) // 0 = Пн
 	lines := strings.Split(md, "\n")
 	for i, line := range lines {
@@ -344,14 +358,15 @@ func applyWeekHighlight(md string, today time.Time) string {
 			lines[i] = strings.Join(cells, "|")
 			continue
 		}
-		// -> Строка времени: "| HH:00 | ... |" — выделяем час в первой колонке.
+		// -> Строка времени: "| ЧЧ:00 | ... |" — выделяем ровный час в первой
+		//    колонке (сетка buildWeekContent содержит только ровные часы).
 		first := strings.TrimSpace(cells[1])
 		clean := strings.ReplaceAll(strings.ReplaceAll(first, "==", ""), "**", "")
 		if !strings.Contains(clean, ":") {
 			continue // -> не строка времени
 		}
 		label := strings.TrimSpace(clean)
-		if label == curHour {
+		if label == targetTime {
 			cells[1] = " " + weekHourHighlight(label) + " "
 		} else {
 			cells[1] = " " + label + " "
@@ -359,6 +374,118 @@ func applyWeekHighlight(md string, today time.Time) string {
 		lines[i] = strings.Join(cells, "|")
 	}
 	return strings.Join(lines, "\n")
+}
+
+// extractWeekData вычленяет пользовательские данные из markdown-таблицы недели:
+// ячейки со второго столбца (дни недели) и со второй строки (строки времени).
+// Возвращает (data, labels), где data — map "день" -> map "ЧЧ:ММ" -> строка
+// (например {"Пн": {"07:30": "йога"}}), а labels — все метки времени в порядке
+// появления (включая кастомные строки без данных, чтобы их сохранить в новой
+// таблице). Заголовок, separator и строки без метки времени вида "ЧЧ:ММ"
+// пропускаются.
+func extractWeekData(md string) (map[string]map[string]string, []string) {
+	data := map[string]map[string]string{}
+	labels := []string{}
+	seenLabel := map[string]bool{}
+	for _, line := range strings.Split(md, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "|") {
+			continue
+		}
+		cells := strings.Split(trimmed, "|")
+		if len(cells) < 3 {
+			continue
+		}
+		label := strings.TrimSpace(cells[1])
+		// Снять возможные обёртки выделения с метки времени (==**14:00**== -> 14:00).
+		label = strings.ReplaceAll(strings.ReplaceAll(label, "==", ""), "**", "")
+		if !isTimeLabel(label) {
+			continue
+		}
+		if !seenLabel[label] {
+			labels = append(labels, label)
+			seenLabel[label] = true
+		}
+		for i := 0; i < 7 && i+2 < len(cells); i++ {
+			day := weekdays[i] // "Пн".."Вс"
+			val := strings.TrimSpace(cells[i+2])
+			if val == "" {
+				continue
+			}
+			if data[day] == nil {
+				data[day] = map[string]string{}
+			}
+			data[day][label] = val
+		}
+	}
+	return data, labels
+}
+
+// isTimeLabel проверяет, что строка — метка времени вида "ЧЧ:ММ" (например
+// "07:30" или "14:00"). Отсекает separator ":--", заголовок "Время" и
+// произвольный текст в первой колонке. Кастомные строки с минутами тоже
+// считаются метками времени — их сохраняем в таблице.
+func isTimeLabel(s string) bool {
+	if len(s) != 5 || s[2] != ':' {
+		return false
+	}
+	for i := 0; i < 5; i++ {
+		if i == 2 {
+			continue
+		}
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// rebuildWeekTable строит полную сетку недели из текущего кода и переносит в
+// неё пользовательские данные из существующего markdown current (см.
+// extractWeekData), затем накладывает выделение текущего времени и дня недели.
+// Строки: ровные часы 00:00–23:00 (всегда присутствуют) + кастомные метки
+// времени "ЧЧ:ММ" (например "07:30"), добавленные пользователем. Метки
+// уникальны и отсортированы по времени. Возвращает готовый markdown таблицы.
+func rebuildWeekTable(current string, today time.Time) string {
+	data, extractLabels := extractWeekData(current)
+
+	// Собираем полный набор меток времени: ровные часы + кастомные "ЧЧ:ММ"
+	// (включая строки без данных — их метки в extractLabels).
+	labels := make([]string, 0, 32)
+	seen := map[string]bool{}
+	for hour := 0; hour < 24; hour++ {
+		label := fmt.Sprintf("%02d:00", hour)
+		labels = append(labels, label)
+		seen[label] = true
+	}
+	for _, label := range extractLabels {
+		if !seen[label] {
+			labels = append(labels, label)
+			seen[label] = true
+		}
+	}
+	// Сортировка по времени (лексikографическая подходит для "ЧЧ:ММ").
+	sort.Strings(labels)
+
+	rows := []string{
+		"| Время | Пн | Вт | Ср | Чт | Пт | Сб | Вс |",
+		"| :-- | " + strings.Join([]string{":--", ":--", ":--", ":--", ":--", ":--", ":--"}, " | ") + " |",
+	}
+	for _, label := range labels {
+		cells := make([]string, 7)
+		for i, day := range weekdays {
+			cell := data[day][label]
+			// Снять возможные обёртки выделения, чтобы не тащить старый
+			// ==**...**== на новую позицию (метки времени/дня наложит applyWeekHighlight).
+			cell = strings.ReplaceAll(strings.ReplaceAll(cell, "==", ""), "**", "")
+			cells[i] = cell
+		}
+		parts := append([]string{label}, cells...)
+		rows = append(rows, "| "+strings.Join(parts, " | ")+" |")
+	}
+	// Выделяем точное текущее время "ЧЧ:ММ" — в пересобранной таблице могут
+	// быть кастомные строки с минутами (например "07:30").
+	return applyWeekHighlight(strings.Join(rows, "\n")+"\n", today, timeLabel(today))
 }
 
 // buildWeekContent возвращает markdown и HTML страницы недели:
@@ -421,6 +548,10 @@ func patchWeekTitle(siteID, path string, page map[string]any, isoYear, iso int) 
 // ==**...**== вокруг меток в таблице, пользовательские записи сохраняет.
 // Заодно приводит заголовок к актуальному. Возвращает true, если страница
 // обновлена (контент или заголовок).
+//
+// Если сервер не отдал исходник (нет права read:source), страницу всё равно
+// обновляем: пользовательские данные из старой таблицы переносятся в свежую
+// сетку 00:00–23:00 (rebuildWeekTable), выделение накладывается поверх.
 func updateWeekHighlight(siteID, path string, page map[string]any, isoYear, iso int, today time.Time) (bool, error) {
 	pageID, _ := page["id"].(string)
 	if pageID == "" {
@@ -437,13 +568,18 @@ func updateWeekHighlight(siteID, path string, page map[string]any, isoYear, iso 
 
 	// -> Выделение часа/дня
 	current, _ := page["content"].(string)
-	if current == "" && page["content"] == nil {
-		if cfg.Verbose {
-			fmt.Printf("[%s] %s: исходник недоступен (нет права), пропуск\n", time.Now().Format("15:04:05"), path)
-		}
+	var updated string
+	if current == "" {
+		// Исходник не отдали (нет права): вычленяем пользовательские данные
+		// из шаблона, собранного из содержания, и переносим в новую таблицу.
+		updated = rebuildWeekTable(current, today)
+	} else {
+		// Существующая сетка (ровные часы) — выделяем текущий час "ЧЧ:00".
+		updated = applyWeekHighlight(current, today, "")
+	}
+	if updated == "" {
 		return touched, nil
 	}
-	updated := applyWeekHighlight(current, today)
 	if updated == current {
 		return touched, nil
 	}
@@ -486,7 +622,7 @@ func ensureWeekPages(siteID string, year int) (int, error) {
 			//    выделяем сразу только текущую неделю.
 			md, html := buildWeekContent()
 			if isCurrentWeek {
-				md = applyWeekHighlight(md, time.Now())
+				md = applyWeekHighlight(md, time.Now(), "") // ровный час "ЧЧ:00"
 			}
 			body := map[string]any{
 				"path":    path,

@@ -20,7 +20,7 @@ func TestWeekHighlightMerge(t *testing.T) {
 	mdEdited = strings.Replace(mdEdited, "| 09:00 |  |  |  |  |  |  |  |",
 		"| 09:00 |  | упражнения |  |  |  |  |", 1)
 
-	got := applyWeekHighlight(mdEdited, now)
+	got := applyWeekHighlight(mdEdited, now, "")
 	if got == mdEdited {
 		t.Fatalf("ожидали изменение (выделение)\n%s", got)
 	}
@@ -39,7 +39,7 @@ func TestWeekHighlightMerge(t *testing.T) {
 
 	// Смена часа: выделение переезжает, заметки целы.
 	now2 := now.Add(time.Hour)
-	got2 := applyWeekHighlight(got, now2)
+	got2 := applyWeekHighlight(got, now2, "")
 	if !strings.Contains(got2, "| ==**15:00**== |") {
 		t.Fatalf("15:00 не выделена:\n%s", got2)
 	}
@@ -54,7 +54,7 @@ func TestWeekHighlightMerge(t *testing.T) {
 	}
 
 	// Идемпотентность.
-	if got3 := applyWeekHighlight(got2, now2); got3 != got2 {
+	if got3 := applyWeekHighlight(got2, now2, ""); got3 != got2 {
 		t.Fatalf("повторный запуск изменил контент")
 	}
 }
@@ -68,7 +68,7 @@ func TestWeekHighlightEdge(t *testing.T) {
 		"|07:00|  |  |  |  |  |  |  |\n" +
 		"| 08:00 | **сегодня** |  |  |  |  |  |  |\n" +
 		"| 09:00 |  |  |  | ==**важно**== |  |  |  |\n"
-	got := applyWeekHighlight(md, now)
+	got := applyWeekHighlight(md, now, "")
 
 	if !strings.Contains(got, "| ==**08:00**== | **сегодня** |") {
 		t.Fatalf("08:00 не выделена:\n%s", got)
@@ -87,6 +87,137 @@ func TestWeekHighlightEdge(t *testing.T) {
 	// Пользовательская пометка ==**важно**== в ячейке нетронута.
 	if !strings.Contains(got, "| ==**важно**== |") {
 		t.Fatalf("пользовательская пометка потеряна:\n%s", got)
+	}
+}
+
+// extractWeekData парсит таблицу в dict: {"день": {"ЧЧ:ММ": "строка"}}.
+func TestExtractWeekData(t *testing.T) {
+	md := "| Время | Пн | Вт | Ср | Чт | Пт | Сб | Вс |\n" +
+		"| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |\n" +
+		"| 09:00 |  | упражнения |  |  |  |  |  |\n" +
+		"| 07:30 | йога |  |  |  |  |  |  |\n" +
+		"| 14:30 |  |  |  |  | созвон |  |  |\n"
+
+	d, labels := extractWeekData(md)
+	if got := d["Вт"]["09:00"]; got != "упражнения" {
+		t.Fatalf("d[Вт][09:00] = %q, ждём упражнения", got)
+	}
+	if got := d["Пн"]["07:30"]; got != "йога" {
+		t.Fatalf("d[Пн][07:30] = %q, ждём йога", got)
+	}
+	if got := d["Пт"]["14:30"]; got != "созвон" {
+		t.Fatalf("d[Пт][14:30] = %q, ждём созвон", got)
+	}
+	// labels содержит ВСЕ метки (включая ровные и кастомные), включая 09:00.
+	wantLabels := map[string]bool{"09:00": true, "07:30": true, "14:30": true}
+	for _, lb := range labels {
+		delete(wantLabels, lb)
+	}
+	if len(wantLabels) != 0 {
+		t.Fatalf("в labels не хватает: %v; имеем %v", wantLabels, labels)
+	}
+	// Пустых ячеек в dict быть не должно.
+	for day, times := range d {
+		for tm, val := range times {
+			if val == "" {
+				t.Fatalf("пустое значение в dict: %s %s", day, tm)
+			}
+			if !isTimeLabel(tm) {
+				t.Fatalf("не-времени ключ в dict: %s -> %q", day, tm)
+			}
+		}
+	}
+}
+
+// Парсер устойчив к отсутствию пробелов вокруг "|" — wiki.js рендерит такие
+// таблицы корректно. Проверяем, что "|07:30|" и "|:--|" распознаются.
+func TestExtractWeekDataNoSpaces(t *testing.T) {
+	md := "|Время|Пн|Вт|Ср|Чт|Пт|Сб|Вс|\n" +
+		"|:--|:--|:--|:--|:--|:--|:--|:--|\n" +
+		"|07:30|йога|  |  |  |  |  |  |\n" +
+		"|09:00|  |упражнения|  |  |  |  |  |\n" +
+		"|14:30|  |  |  |  |созвон|  |  |\n"
+
+	d, labels := extractWeekData(md)
+	if got := d["Пн"]["07:30"]; got != "йога" {
+		t.Fatalf("d[Пн][07:30] = %q, ждём йога (нет пробелов вокруг |)", got)
+	}
+	if got := d["Вт"]["09:00"]; got != "упражнения" {
+		t.Fatalf("d[Вт][09:00] = %q, ждём упражнения", got)
+	}
+	if got := d["Пт"]["14:30"]; got != "созвон" {
+		t.Fatalf("d[Пт][14:30] = %q, ждём созвон", got)
+	}
+	// Кастомная метка без пробелов попала в labels.
+	found := false
+	for _, lb := range labels {
+		if lb == "07:30" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("07:30 не в labels: %v", labels)
+	}
+}
+
+// rebuildWeekTable переносит пользовательские записи из старого markdown
+// в новую таблицу, сохраняя и кастомные строки времени (напр. "07:30"),
+// и выделение текущего времени/дня.
+func TestRebuildWeekTable(t *testing.T) {
+	now := time.Date(2026, 11, 15, 14, 30, 0, 0, time.Local) // воскресенье, 14:30
+
+	// Старая таблица: заметки в ячейках, кастомная строка "07:30" без пробелов,
+	// лишняя строка перед таблицей, выделения старого времени 13:00.
+	old := "какой-то текст\n" +
+		"| Время | Пн | Вт | Ср | Чт | Пт | Сб | Вс |\n" +
+		"| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |\n" +
+		"| 09:00 |  | упражнения |  |  |  |  |  |\n" +
+		"|07:30|  |  |  |  |  |  |  |\n" +
+		"| 13:00 | ==**дедлайн**== |  |  |  |  |  |  |\n" +
+		"| 14:00 |  |  |  | встреча |  |  |  |\n" +
+		"| 14:30 |  |  |  |  | созвон |  |  |\n"
+
+	got := rebuildWeekTable(old, now)
+
+	// Новая таблица: записи перенесены.
+	if !strings.Contains(got, "| 09:00 |  | упражнения |  |  |  |  |  |") {
+		t.Fatalf("запись 09:00 не перенесена:\n%s", got)
+	}
+	// Кастомная строка 07:30 сохранилась.
+	if !strings.Contains(got, "| 07:30 |") {
+		t.Fatalf("кастомная строка 07:30 не сохранена:\n%s", got)
+	}
+	// 14:30 (текущее время) выделена; встреча 14:00 перенесена, но не выделена.
+	if !strings.Contains(got, "| ==**14:30**== |  |  |  |  | созвон |  |  |") {
+		t.Fatalf("текущее время 14:30 не выделено (или запись не перенесена):\n%s", got)
+	}
+	if !strings.Contains(got, "| 14:00 |  |  |  | встреча |  |  |  |") {
+		t.Fatalf("14:00 не перенесена:\n%s", got)
+	}
+	// День недели выделен.
+	if !strings.Contains(got, "| Время | Пн | Вт | Ср | Чт | Пт | Сб | ==**Вс**== |") {
+		t.Fatalf("день недели не выделен:\n%s", got)
+	}
+	// Старое выделение убрано.
+	if strings.Contains(got, "==**дедлайн**==") {
+		t.Fatalf("старое выделение осталось:\n%s", got)
+	}
+	// В таблице 24 ровных часа + кастомные 07:30 и 14:30 = 26 строк времени.
+	hourRows := 0
+	for _, line := range strings.Split(got, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "|") {
+			continue
+		}
+		f := strings.TrimSpace(strings.Split(trimmed, "|")[1])
+		// Снять возможные обёртки выделения (==**14:30**== -> 14:30).
+		f = strings.ReplaceAll(strings.ReplaceAll(f, "==", ""), "**", "")
+		if len(f) == 5 && f[2] == ':' {
+			hourRows++
+		}
+	}
+	if hourRows != 26 {
+		t.Fatalf("ожидали 26 строк времени (24 часа + 07:30 + 14:30), получили %d:\n%s", hourRows, got)
 	}
 }
 
@@ -111,7 +242,7 @@ func TestWeekHighlightMissingRow(t *testing.T) {
 		"| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |\n" +
 		"| 13:00 | дедлайн |  |  |  |  |  |  |\n" +
 		"| 15:00 |  |  |  |  |  |  |  |\n"
-	got := applyWeekHighlight(md, now)
+	got := applyWeekHighlight(md, now, "")
 	if strings.Contains(got, "==**14:00**==") {
 		t.Fatalf("не должно быть выделения без строки 14:00:\n%s", got)
 	}
