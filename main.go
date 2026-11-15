@@ -343,7 +343,7 @@ func ensureWeekPages(siteID string, year int) (int, error) {
 			md, html := buildWeekContent()
 			body := map[string]any{
 				"path":    path,
-				"title":   fmt.Sprintf("Неделя %d", iso),
+				"title":   fmt.Sprintf("Неделя %d (%d)", iso, isoYear),
 				"editor":  "markdown",
 				"content": md,
 				"render":  html,
