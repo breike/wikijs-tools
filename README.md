@@ -177,33 +177,14 @@ WIKI_HOST=https://wiki.example.com WIKI_TOKEN=... ./wiki-calendar   # built bina
 The tool loops forever; run it under `nohup`, a terminal multiplexer, or a supervisor
 of your choice.
 
-## Org-mode import (events into the week grid)
+## Adding events from Org-mode
 
-There's an auxiliary command that prepares an Org-mode file from a template and
-fills in the current date/time — a convenient starting point for adding events to
-the week pages' hourly grid:
-
-```sh
-wiki-calendar copy-org-template          # creates /tmp/wiki-calendar.org
-WIKI_ORG_FILE=~/calendar.org wiki-calendar copy-org-template   # custom path
-```
-
-It copies `org/calendar.org.example` (shipped with the repo) to the target path
-(`WIKI_ORG_FILE`, default `/tmp/wiki-calendar.org`) and replaces the `ДАТА_СЕГОДНЯ /
-ВРЕМЯ_СЕЙЧАС / ВРЕМЯ_ПЛЮС_ЧАС` placeholders with real values, leaving the event
-placeholders (`ПРИМЕР_СОБЫТИЯ*`) for you to fill in:
-
-```org
-* <2026-11-15> 20:53 ПРИМЕР_СОБЫТИЯ
-* <2026-11-15> 21:53 ПРИМЕР_СОБЫТИЯ_2
-```
-
-Each line is an Org-mode heading with a timestamp `* <ГГГГ-ММ-ДД> ЧЧ:ММ текст`;
-lines starting with `#` and everything else is ignored by the importer.
-
-> The importer itself (`wiki-calendar org-import`, reading the file and adding each
-> event to the matching `cal-<year>-week-<week>` page, preserving existing cells)
-> is planned — `copy-org-template` is the first half that produces the file.
+The Org-mode workflow (preparing a template with `copy-org-template` and adding
+events to the week grids with `org-import`) lives in a separate project:
+**wikijs-client-tools** — client-side utilities for Wiki.js, reusing the same
+week-table parsing as this daemon (`extractWeekData` / `rebuildWeekTable`). This
+project only *keeps the week pages up to date* (highlight, titles); it does not
+edit the grid content.
 
 > `systemd/install.sh` is an **alternative** to the Arch PKGBUILD for manual
 > installs: it builds to `/usr/bin` and installs the unit to the **same** location

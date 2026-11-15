@@ -759,15 +759,6 @@ func maskToken(t string) string {
 }
 
 func main() {
-	// Локальные подкоманды, не требующие подключения к Wiki.js.
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "copy-org-template":
-			cmdCopyOrgTemplate()
-			return
-		}
-	}
-
 	if cfg.Token == "" || strings.HasPrefix(cfg.Token, "PASTE_") || cfg.Host == "" || strings.HasPrefix(cfg.Host, "https://wiki.example.com") {
 		if cfg.Verbose {
 			fmt.Println("Не настроен WIKI_HOST / WIKI_TOKEN.")
