@@ -1,0 +1,22 @@
+#!/sbin/openrc-run
+# Copyright 2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+description="Publish a yearly calendar with per-week hour tables to Wiki.js (cal-<year>, cal-<year>-week-<week>)"
+command="/usr/bin/wiki-calendar"
+command_background="true"
+pidfile="/run/${RC_SVCNAME}.pid"
+
+# Export the WIKI_* configuration so the daemon process inherits it.
+# The raw Go binary reads its settings from the environment only.
+export WIKI_HOST
+export WIKI_TOKEN
+export WIKI_REFRESH_INTERVAL_S
+export WIKI_SITE_ID
+export WIKI_LOCALE
+export WIKI_VERBOSE
+
+depend() {
+	need net
+	after firewall
+}

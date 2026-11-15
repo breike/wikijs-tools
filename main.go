@@ -459,7 +459,8 @@ func saveCalendar(md, html string, year int) error {
 
 func main() {
 	if strings.HasPrefix(cfg.Token, "PASTE_") || cfg.Host == "https://wiki.example.com" {
-		fmt.Println("Укажи WIKI_HOST и WIKI_TOKEN в systemd/wiki-calendar.service (или ENV).")
+		fmt.Println("Укажи WIKI_HOST и WIKI_TOKEN в systemd/wiki-calendar.service,")
+		fmt.Println("/etc/conf.d/wiki-calendar (OpenRC) или в окружении.")
 		os.Exit(1)
 	}
 

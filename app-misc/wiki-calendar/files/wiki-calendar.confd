@@ -1,0 +1,24 @@
+# /etc/conf.d/wiki-calendar: config file for /etc/init.d/wiki-calendar
+# These variables are passed to the wiki-calendar daemon as environment
+# variables. They mirror the defaults compiled into the binary.
+
+# URL of your Wiki.js instance (without a trailing slash)
+WIKI_HOST="https://wiki.example.com"
+
+# Personal access token with the "pages" scope, or a system API key.
+# Create one in Wiki.js: Administration -> API keys
+WIKI_TOKEN=""
+
+# How often the calendar page is refreshed, in seconds.
+# A new calendar for the new year is created automatically.
+WIKI_REFRESH_INTERVAL_S="60"
+
+# ID of the Wiki.js site to publish to (from Administration -> Sites).
+# Leave empty to use the default site.
+WIKI_SITE_ID=""
+
+# Optional locale (e.g. "ru", "en") used for page lookups.
+WIKI_LOCALE=""
+
+# Verbose output to the system log (1 = yes, 0 = no)
+WIKI_VERBOSE="1"

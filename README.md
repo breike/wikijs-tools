@@ -63,14 +63,16 @@ cd wikijs-tools
 makepkg -si
 ```
 
-> The PKGBUILD pulls the sources from the `main` branch of
+> The PKGBUILD pulls the sources from the `master` branch of
 > `https://github.com/breike/wikijs-tools` (`sha256sums=('SKIP')`, same approach as
 > the project's other packages). Make sure the repository is pushed.
 
 This installs:
 
 - `/usr/bin/wiki-calendar` — the binary
-- `/usr/lib/systemd/system/wiki-calendar.service` — the service unit
+- `/usr/lib/systemd/system/wiki-calendar.service` — the systemd unit (if systemd is used)
+- `/etc/init.d/wiki-calendar` + `/etc/conf.d/wiki-calendar` — the OpenRC init script
+  and its configuration (on Gentoo, see below)
 
 ### 2. Configure
 
@@ -108,6 +110,50 @@ Open `https://<wiki>/cal-<year>` — you should see the current year's calendar 
 After a year change the service automatically starts maintaining the new `cal-<year>`
 page; old pages are left untouched.
 
+## Install on Gentoo Linux
+
+The repository includes an ebuild for an overlay:
+
+```sh
+# clone/update the overlay, e.g.:
+#   eselect repository enable wiki-calendar   (or add it to repos.conf)
+# then:
+emerge -av app-misc/wiki-calendar
+```
+
+The ebuild installs:
+
+- `/usr/bin/wiki-calendar` — the binary
+- `/etc/init.d/wiki-calendar` — the OpenRC init script
+- `/etc/conf.d/wiki-calendar` — configuration (the `WIKI_*` variables from the table above)
+- `/usr/lib/systemd/system/wiki-calendar.service` — the systemd unit as well
+
+### OpenRC (default on Gentoo)
+
+Edit `/etc/conf.d/wiki-calendar` and set the `WIKI_HOST` / `WIKI_TOKEN` variables, then:
+
+```sh
+rc-update add wiki-calendar default
+rc-service wiki-calendar start
+rc-service wiki-calendar status      # check it is running
+tail -f /var/log/messages            # follow the log
+```
+
+The init script supervises the daemon with `supervise-daemon` and restarts it if it
+crashes. The file `/etc/conf.d/wiki-calendar` is `CONFIG_PROTECT`ed, so your edits
+survive package upgrades.
+
+### systemd (optional)
+
+The same variables live in the unit file — use `systemctl edit wiki-calendar`
+or edit `/usr/lib/systemd/system/wiki-calendar.service` directly:
+
+```sh
+systemctl enable --now wiki-calendar
+systemctl status wiki-calendar       # check it is running
+journalctl -u wiki-calendar -f       # follow the log
+```
+
 ## Manual run (without systemd)
 
 ```sh
@@ -116,7 +162,8 @@ WIKI_HOST=https://wiki.example.com WIKI_TOKEN=... ./wiki-calendar   # built bina
 ```
 
 The tool loops forever; run it under `nohup`, a terminal multiplexer, or a supervisor
-of your choice. `systemd/install.sh` automates building to `/usr/bin` + unit install.
+of your choice. `systemd/install.sh` automates building to `/usr/bin` + systemd unit
+install (for OpenRC, see the Gentoo section).
 
 ## Development
 
