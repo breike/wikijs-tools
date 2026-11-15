@@ -1,4 +1,4 @@
-# Wiki.js Calendar Publisher
+# wikijs-tools — Wiki.js Calendar Publisher
 
 Publishes a yearly calendar to [Wiki.js](https://js.wiki) and keeps it up to date —
 with a dedicated page per week that has an hourly grid, ready to plan your time in.
