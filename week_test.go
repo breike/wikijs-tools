@@ -6,114 +6,116 @@ import (
 	"time"
 )
 
-func TestHourHighlightMerge(t *testing.T) {
+// Сгенерировать сетку, добавить пользовательские записи, проверить, что
+// applyWeekHighlight выделяет текущий час и день недели, сохраняя записи.
+func TestWeekHighlightMerge(t *testing.T) {
+	// 2026-11-15 = воскресенье (Вс, idx 6), 14:xx
 	now := time.Date(2026, 11, 15, 14, 30, 0, 0, time.Local)
-	md, _ := buildWeekContent(now)
 
-	mdEdited := strings.Replace(md, "| ==**14:00**== |  |  |  |  |  |  |  |",
+	md, _ := buildWeekContent() // чистая сетка
+
+	// Пользовательские правки: заметки в ячейках.
+	mdEdited := strings.Replace(md, "| 14:00 |  |  |  |  |  |  |  |",
 		"| 14:00 |  |  |  | встреча |  |  |  |", 1)
 	mdEdited = strings.Replace(mdEdited, "| 09:00 |  |  |  |  |  |  |  |",
 		"| 09:00 |  | упражнения |  |  |  |  |", 1)
 
-	got1 := applyHourHighlight(mdEdited, now)
-	if got1 == mdEdited {
-		t.Fatalf("ожидали изменение (восстановление выделения 14:00)\n%s", got1)
+	got := applyWeekHighlight(mdEdited, now)
+	if got == mdEdited {
+		t.Fatalf("ожидали изменение (выделение)\n%s", got)
 	}
-	if !strings.Contains(got1, "| ==**14:00**== |  |  |  | встреча |  |  |  |") {
-		t.Fatalf("14:00 не выделена с сохранением встречи:\n%s", got1)
+	// Час 14:00 выделен, заметка сохранена.
+	if !strings.Contains(got, "| ==**14:00**== |  |  |  | встреча |  |  |  |") {
+		t.Fatalf("14:00 не выделена с сохранением встречи:\n%s", got)
 	}
-	if !strings.Contains(got1, "| 09:00 |  | упражнения |  |  |  |  |") {
-		t.Fatalf("заметки 09:00 потеряны:\n%s", got1)
+	// День недели: воскресенье (последняя колонка заголовка) выделен.
+	if !strings.Contains(got, "| Время | Пн | Вт | Ср | Чт | Пт | Сб | ==**Вс**== |") {
+		t.Fatalf("воскресенье не выделено в заголовке:\n%s", got)
+	}
+	// Заметка 09:00 цела.
+	if !strings.Contains(got, "| 09:00 |  | упражнения |  |  |  |  |") {
+		t.Fatalf("заметки 09:00 потеряны:\n%s", got)
 	}
 
+	// Смена часа: выделение переезжает, заметки целы.
 	now2 := now.Add(time.Hour)
-	got2 := applyHourHighlight(got1, now2)
+	got2 := applyWeekHighlight(got, now2)
 	if !strings.Contains(got2, "| ==**15:00**== |") {
 		t.Fatalf("15:00 не выделена:\n%s", got2)
 	}
 	if strings.Contains(got2, "==**14:00**==") {
 		t.Fatalf("14:00 всё ещё выделена:\n%s", got2)
 	}
-	if !strings.Contains(got2, "| 09:00 |  | упражнения |  |  |  |  |") {
-		t.Fatalf("заметки потеряны при смене часа:\n%s", got2)
-	}
 	if !strings.Contains(got2, "| 14:00 |  |  |  | встреча |  |  |  |") {
 		t.Fatalf("встреча потеряна при снятии выделения:\n%s", got2)
 	}
+	if !strings.Contains(got2, "| 09:00 |  | упражнения |  |  |  |  |") {
+		t.Fatalf("заметки потеряны при смене часа:\n%s", got2)
+	}
 
-	got3 := applyHourHighlight(got2, now2)
-	if got3 != got2 {
+	// Идемпотентность.
+	if got3 := applyWeekHighlight(got2, now2); got3 != got2 {
 		t.Fatalf("повторный запуск изменил контент")
 	}
 }
 
-// Угловые: пользователь вставил ==**...**== в ячейку дня (не время), метка времени без пробелов.
-func TestHourHighlightEdge(t *testing.T) {
-	now := time.Date(2026, 11, 15, 8, 5, 0, 0, time.Local)
+// Края форматирования: метка времени без пробелов, пользовательские ==**...**==
+// в ячейках дней, жирный день.
+func TestWeekHighlightEdge(t *testing.T) {
+	now := time.Date(2026, 11, 13, 8, 5, 0, 0, time.Local) // пятница (idx 4)
 	md := "| Время | Пн | Вт | Ср | Чт | Пт | Сб | Вс |\n" +
 		"| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |\n" +
 		"|07:00|  |  |  |  |  |  |  |\n" +
 		"| 08:00 | **сегодня** |  |  |  |  |  |  |\n" +
 		"| 09:00 |  |  |  | ==**важно**== |  |  |  |\n"
-	got := applyHourHighlight(md, now)
-	// 08:00 выделена
+	got := applyWeekHighlight(md, now)
+
 	if !strings.Contains(got, "| ==**08:00**== | **сегодня** |") {
 		t.Fatalf("08:00 не выделена:\n%s", got)
 	}
-	// 07:00 без выделения — нормализована, но содержимое цело
+	// Пятница (5-я колонка данных) выделена в заголовке.
+	if !strings.Contains(got, "| Время | Пн | Вт | Ср | Чт | ==**Пт**== | Сб | Вс |") {
+		t.Fatalf("пятница не выделена:\n%s", got)
+	}
+	// 07:00 нормализована, но не выделена.
 	if !strings.Contains(got, "| 07:00 |") {
 		t.Fatalf("07:00 сломана:\n%s", got)
 	}
 	if strings.Contains(got, "==**07:00**==") {
 		t.Fatalf("07:00 не должна быть выделена")
 	}
-	// ==**важно**== в ячейке вторника нетронут
+	// Пользовательская пометка ==**важно**== в ячейке нетронута.
 	if !strings.Contains(got, "| ==**важно**== |") {
 		t.Fatalf("пользовательская пометка потеряна:\n%s", got)
 	}
-	// Никаких других ==**...**== на строках времени (кроме 08:00) нет
-	if strings.Contains(got, "==**09:00**==") {
-		t.Fatalf("09:00 не должна быть выделена:\n%s", got)
+}
+
+// buildWeekContent — чистая сетка без выделений.
+func TestBuildWeekContent(t *testing.T) {
+	md, html := buildWeekContent()
+	if strings.Contains(md, "==**") {
+		t.Fatalf("новая сетка не должна содержать выделений:\n%s", md)
+	}
+	if !strings.Contains(md, "| 14:00 |") || !strings.Contains(md, "| 23:00 |") {
+		t.Fatalf("сетка неполная:\n%s", md)
+	}
+	if !strings.Contains(html, "<table>") || !strings.Contains(html, "</table>") {
+		t.Fatalf("нет таблицы в html")
 	}
 }
 
-// Хелпер: убрать ==**...**== со строки времени (не нужен, но для полноты не нужен)
-func TestBuildWeekContentHighlights(t *testing.T) {
-	now := time.Date(2026, 11, 15, 14, 30, 0, 0, time.Local)
-	md, html := buildWeekContent(now)
-	if !strings.Contains(md, "| ==**14:00**== |") {
-		t.Fatalf("md не содержит выделение 14:00")
-	}
-	if !strings.Contains(html, "<mark><strong>14:00</strong></mark>") {
-		t.Fatalf("html не содержит выделение 14:00")
-	}
-	// Ровно один выделенный час (==**HH:00**==)
-	c := strings.Count(md, "==**")
-	if c != 1 {
-		t.Fatalf("должен быть ровно один выделенный час, count== (%d):\n%s", c, md)
-	}
-	if !strings.Contains(md, "| ==**14:00**== |") {
-		t.Fatalf("нет ==**14:00**== в md")
-	}
-}
-
-// Пользователь удалил строку 14:00 полностью — скрипт не должен ломаться,
-// а только отметить существующие.
-func TestHourHighlightMissingRow(t *testing.T) {
+// Пользователь удалил строку текущего часа — скрипт не должен ломаться.
+func TestWeekHighlightMissingRow(t *testing.T) {
 	now := time.Date(2026, 11, 15, 14, 30, 0, 0, time.Local)
 	md := "| Время | Пн | Вт | Ср | Чт | Пт | Сб | Вс |\n" +
 		"| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |\n" +
 		"| 13:00 | дедлайн |  |  |  |  |  |  |\n" +
 		"| 15:00 |  |  |  |  |  |  |  |\n"
-	got := applyHourHighlight(md, now)
-	// 14:00 нет — ничего не выделено, 13:00 цела
-	if strings.Contains(got, "==**") {
+	got := applyWeekHighlight(md, now)
+	if strings.Contains(got, "==**14:00**==") {
 		t.Fatalf("не должно быть выделения без строки 14:00:\n%s", got)
 	}
 	if !strings.Contains(got, "| 13:00 | дедлайн |") {
 		t.Fatalf("запись потеряна:\n%s", got)
-	}
-	if got != md {
-		t.Fatalf("контент не должен меняться без изменений:\n%s\nvs\n%s", got, md)
 	}
 }

@@ -297,7 +297,8 @@ func getSiteID() (string, error) {
 
 // ---------- Страница недели ----------
 
-// weekHourHighlight — markdown-обёртка для выделения часа в таблице недели.
+// weekHourHighlight — markdown-обёртка для выделения метки (часа или дня недели)
+// в таблице недели.
 func weekHourHighlight(label string) string {
 	return fmt.Sprintf("==**%s**==", label)
 }
@@ -307,14 +308,20 @@ func hourLabel(t time.Time) string {
 	return fmt.Sprintf("%02d:00", t.Hour())
 }
 
-// applyHourHighlight применяет выделение текущего часа к markdown-сетке недели.
-// Убирает ==**...**== с любых строк "| HH:00 |", затем ставит на текущий час.
-// Пользовательские записи в остальных ячейках не трогаются.
-func applyHourHighlight(md string, today time.Time) string {
-	cur := hourLabel(today)
+// weekdayIndex — индекс сегодняшнего дня в [7]string{Пн..Вс} (0 = Пн, 6 = Вс).
+func weekdayIndex(t time.Time) int {
+	return (int(t.Weekday()) + 6) % 7
+}
+
+// applyWeekHighlight применяет к markdown-сетке недели выделение текущего
+// часа (первая колонка строки "| HH:00 |") и текущего дня недели (заголовок
+// колонки "| Время | Пн | ... |"). Прежние ==**...**== с тех же мест убираются.
+// Пользовательские записи в ячейках таблицы не трогаются.
+func applyWeekHighlight(md string, today time.Time) string {
+	curHour := hourLabel(today)
+	curDow := weekdayIndex(today) // 0 = Пн
 	lines := strings.Split(md, "\n")
 	for i, line := range lines {
-		// -> Строка таблицы часов: "| 14:00 | ... |"
 		trimmed := strings.TrimSpace(line)
 		if !strings.HasPrefix(trimmed, "|") {
 			continue
@@ -323,16 +330,28 @@ func applyHourHighlight(md string, today time.Time) string {
 		if len(cells) < 3 {
 			continue
 		}
+		// -> Заголовок таблицы: "| Время | Пн | Вт | ... |" — выделяем день недели.
+		if strings.Contains(trimmed, "Время") && strings.Contains(cells[1], "ремя") {
+			for c := 2; c < len(cells); c++ {
+				clean := strings.Trim(strings.ReplaceAll(strings.ReplaceAll(cells[c], "==", ""), "**", ""), " ")
+				idx := c - 2
+				if idx == curDow {
+					cells[c] = " " + weekHourHighlight(clean) + " "
+				} else {
+					cells[c] = " " + clean + " "
+				}
+			}
+			lines[i] = strings.Join(cells, "|")
+			continue
+		}
+		// -> Строка времени: "| HH:00 | ... |" — выделяем час в первой колонке.
 		first := strings.TrimSpace(cells[1])
-		// -> Убрать любое предыдущее выделение
-		clean := strings.ReplaceAll(first, "==", "")
-		clean = strings.ReplaceAll(clean, "**", "")
-		// -> Восстановить метку часа из колонки времени
+		clean := strings.ReplaceAll(strings.ReplaceAll(first, "==", ""), "**", "")
 		if !strings.Contains(clean, ":") {
 			continue // -> не строка времени
 		}
 		label := strings.TrimSpace(clean)
-		if label == cur {
+		if label == curHour {
 			cells[1] = " " + weekHourHighlight(label) + " "
 		} else {
 			cells[1] = " " + label + " "
@@ -343,9 +362,9 @@ func applyHourHighlight(md string, today time.Time) string {
 }
 
 // buildWeekContent возвращает markdown и HTML страницы недели:
-// часовая сетка 00:00–23:00 по дням недели, с выделением текущего часа.
-func buildWeekContent(today time.Time) (string, string) {
-	cur := hourLabel(today)
+// часовая сетка 00:00–23:00 по дням недели. Без выделений — их накладывает
+// applyWeekHighlight только на страницу текущей недели.
+func buildWeekContent() (string, string) {
 	var mdRows, htmlRows []string
 
 	mdRows = append(mdRows, "| Время | Пн | Вт | Ср | Чт | Пт | Сб | Вс |")
@@ -357,15 +376,9 @@ func buildWeekContent(today time.Time) (string, string) {
 
 	for hour := 0; hour < 24; hour++ {
 		label := fmt.Sprintf("%02d:00", hour)
-		mdFirst := label
-		htmlFirst := label
-		if label == cur {
-			mdFirst = weekHourHighlight(label)
-			htmlFirst = fmt.Sprintf("<mark><strong>%s</strong></mark>", label)
-		}
-		mdRows = append(mdRows, "| "+mdFirst+" |  |  |  |  |  |  |  |")
+		mdRows = append(mdRows, "| "+label+" |  |  |  |  |  |  |  |")
 		htmlRows = append(htmlRows,
-			fmt.Sprintf("<tr><td>%s</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>", htmlFirst))
+			fmt.Sprintf("<tr><td>%s</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>", label))
 	}
 
 	md := strings.Join(mdRows, "\n") + "\n"
@@ -373,11 +386,11 @@ func buildWeekContent(today time.Time) (string, string) {
 	return md, html
 }
 
-// updateWeekHourHighlight обновляет на существующей странице недели выделение
-// текущего часа: скачивает контент, меняет только обёртку ==**...**== вокруг
-// метки часа в первой колонке таблицы, пользовательские записи сохраняет.
+// updateWeekHighlight обновляет на существующей странице недели выделение
+// текущего часа и дня недели: скачивает контент, меняет только обёртки
+// ==**...**== вокруг меток в таблице, пользовательские записи сохраняет.
 // Возвращает true, если контент изменился и страница обновлена.
-func updateWeekHourHighlight(siteID, path string, page map[string]any, today time.Time) (bool, error) {
+func updateWeekHighlight(siteID, path string, page map[string]any, today time.Time) (bool, error) {
 	current, _ := page["content"].(string)
 	if current == "" && page["content"] == nil {
 		if cfg.Verbose {
@@ -385,7 +398,7 @@ func updateWeekHourHighlight(siteID, path string, page map[string]any, today tim
 		}
 		return false, nil
 	}
-	updated := applyHourHighlight(current, today)
+	updated := applyWeekHighlight(current, today)
 	if updated == current {
 		return false, nil
 	}
@@ -400,19 +413,21 @@ func updateWeekHourHighlight(siteID, path string, page map[string]any, today tim
 		return false, fmt.Errorf("PATCH страницы %s: %w", path, err)
 	}
 	if cfg.Verbose {
-		fmt.Printf("[%s] Выделен час %s на %s\n", time.Now().Format("15:04:05"), hourLabel(today), path)
+		fmt.Printf("[%s] Выделено %s в %s на %s\n", time.Now().Format("15:04:05"), hourLabel(today), weekdays[weekdayIndex(today)], path)
 	}
 	return true, nil
 }
 
 // ensureWeekPages создаёт страницы всех недель ISO-года year (cal-<год>-week-<n>),
-// которых ещё нет; для существующих обновляет только выделение текущего часа,
-// не трогая пользовательский контент. Возвращает число созданных.
+// которых ещё нет; для существующих обновляет выделение текущего часа и дня
+// только на странице текущей недели, не трогая пользовательский контент.
+// Возвращает число созданных.
 func ensureWeekPages(siteID string, year int) (int, error) {
 	// Неделя 1 ISO-года — та, что содержит 4 января. Начинаем с её понедельника
 	// и идём по +7 дней, пока понедельник ещё принадлежит этому ISO-году.
 	jan4 := time.Date(year, time.January, 4, 0, 0, 0, 0, time.Local)
 	monday := jan4.AddDate(0, 0, -int((jan4.Weekday()+6)%7))
+	curISOYear, curISO := time.Now().ISOWeek()
 	created := 0
 	for {
 		isoYear, iso := monday.ISOWeek()
@@ -424,9 +439,14 @@ func ensureWeekPages(siteID string, year int) (int, error) {
 		if err != nil {
 			return created, err
 		}
+		isCurrentWeek := isoYear == curISOYear && iso == curISO
 		if page == nil {
-			today := time.Now()
-			md, html := buildWeekContent(today)
+			// -> Вновь создаваемые страницы — чистая сетка без выделений;
+			//    выделяем сразу только текущую неделю.
+			md, html := buildWeekContent()
+			if isCurrentWeek {
+				md = applyWeekHighlight(md, time.Now())
+			}
 			body := map[string]any{
 				"path":    path,
 				"title":   fmt.Sprintf("Неделя %d (%d)", iso, isoYear),
@@ -444,8 +464,10 @@ func ensureWeekPages(siteID string, year int) (int, error) {
 			if cfg.Verbose {
 				fmt.Printf("[%s] Создана страница %s\n", time.Now().Format("15:04:05"), path)
 			}
-		} else if _, err := updateWeekHourHighlight(siteID, path, page, time.Now()); err != nil {
-			return created, err
+		} else if isCurrentWeek {
+			if _, err := updateWeekHighlight(siteID, path, page, time.Now()); err != nil {
+				return created, err
+			}
 		}
 		monday = monday.AddDate(0, 0, 7)
 	}
