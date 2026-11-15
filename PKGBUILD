@@ -14,21 +14,21 @@ install=wiki-calendar.install
 # Source comes from the git repo's default branch. The default branch
 # (main) is a moving target, so the checksum is intentionally SKIP —
 # same approach as thinkpad_remapper.
-source=("${url}/archive/refs/heads/main.tar.gz")
+source=("${url}/archive/refs/heads/master.tar.gz")
 sha256sums=('SKIP')
 
 build() {
-    cd "${srcdir}/wikijs-tools-main"
+    cd "${srcdir}/wikijs-tools-master"
     go build -trimpath -o wiki-calendar .
 }
 
 check() {
-    cd "${srcdir}/wikijs-tools-main"
+    cd "${srcdir}/wikijs-tools-master"
     go vet ./...
 }
 
 package() {
-    cd "${srcdir}/wikijs-tools-main"
+    cd "${srcdir}/wikijs-tools-master"
 
     # Binary
     install -Dm755 wiki-calendar "${pkgdir}/usr/bin/wiki-calendar"
