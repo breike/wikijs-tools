@@ -2,7 +2,7 @@
 
 pkgname=wiki-calendar
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="Publish a yearly calendar with per-week hour tables to Wiki.js (cal-<year>, cal-<year>-week-<week>)"
 arch=('x86_64')
 url="https://github.com/breike/wikijs-tools"
