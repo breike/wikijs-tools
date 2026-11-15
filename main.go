@@ -610,10 +610,28 @@ func saveCalendar(md, html string, year int) error {
 	return nil
 }
 
+// maskToken скрывает токен в логах: если он короткий/пустой — как есть,
+// иначе первые 4 символа + "...".
+func maskToken(t string) string {
+	if len(t) <= 6 {
+		if t == "" {
+			return "(пусто)"
+		}
+		return "(задан, короткий)"
+	}
+	return t[:4] + "…" + t[len(t)-2:]
+}
+
 func main() {
-	if strings.HasPrefix(cfg.Token, "PASTE_") || cfg.Host == "https://wiki.example.com" {
-		fmt.Println("Укажи WIKI_HOST и WIKI_TOKEN в systemd/wiki-calendar.service,")
-		fmt.Println("/etc/conf.d/wiki-calendar (OpenRC) или в окружении.")
+	if cfg.Token == "" || strings.HasPrefix(cfg.Token, "PASTE_") || cfg.Host == "" || strings.HasPrefix(cfg.Host, "https://wiki.example.com") {
+		if cfg.Verbose {
+			fmt.Println("Не настроен WIKI_HOST / WIKI_TOKEN.")
+			fmt.Println("Прописать их можно в:")
+			fmt.Println("  systemd (Arch):  /etc/wiki-calendar.env")
+			fmt.Println("  OpenRC (Gentoo): /etc/conf.d/wiki-calendar")
+			fmt.Println("(или передать в окружении процесса WIKI_HOST, WIKI_TOKEN).")
+			fmt.Printf("Сейчас: WIKI_HOST=%q WIKI_TOKEN=%s\n", cfg.Host, maskToken(cfg.Token))
+		}
 		os.Exit(1)
 	}
 
