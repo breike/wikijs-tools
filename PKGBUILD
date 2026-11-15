@@ -11,6 +11,11 @@ depends=()
 makedepends=('go')
 install=wiki-calendar.install
 
+# /etc/wiki-calendar.env правится пользователем один раз (WIKI_HOST, WIKI_TOKEN...).
+# backup=() = pacman не перезаписывает изменённый конфиг при переустановке:
+# актуальная версия ложится рядом как .pacnew.
+backup=('etc/wiki-calendar.env')
+
 # Source comes from the git repo's default branch. The default branch
 # (main) is a moving target, so the checksum is intentionally SKIP —
 # same approach as thinkpad_remapper.
@@ -36,4 +41,7 @@ package() {
     # Systemd unit
     install -Dm644 systemd/wiki-calendar.service \
         "${pkgdir}/usr/lib/systemd/system/wiki-calendar.service"
+
+    # Config (user-editable variables). backup=() keeps it across reinstalls.
+    install -Dm644 systemd/wiki-calendar.env "${pkgdir}/etc/wiki-calendar.env"
 }

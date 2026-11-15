@@ -14,7 +14,9 @@ SRC_URI="https://github.com/breike/wikijs-tools/archive/refs/heads/master.tar.gz
 LICENSE="MIT"
 SLOT="0"
 KEYWORDS="~amd64"
-CONFIG_PROTECT="/etc/conf.d/wiki-calendar"
+# Оба файла конфигурации защищены от перезаписи при апгрейде:
+# OpenRC использует /etc/conf.d/wiki-calendar, systemd — /etc/wiki-calendar.env.
+CONFIG_PROTECT="/etc/conf.d/wiki-calendar /etc/wiki-calendar.env"
 
 # No external Go dependencies (stdlib only), so no go-module eclass / vendor needed.
 BDEPEND="dev-lang/go"
@@ -28,20 +30,23 @@ src_compile() {
 src_install() {
 	dobin wiki-calendar
 	systemd_dounit systemd/wiki-calendar.service
+	# Файл переменных для systemd-юнита (EnvironmentFile); на OpenRC его
+	# не используем — там /etc/conf.d/wiki-calendar.
+	insinto /etc
+	newins systemd/wiki-calendar.env wiki-calendar.env
 	newinitd "${FILESDIR}"/wiki-calendar.initd wiki-calendar
 	newconfd "${FILESDIR}"/wiki-calendar.confd wiki-calendar
 	dodoc README.md
 }
 
 pkg_postinst() {
-	elog "Edit /etc/conf.d/wiki-calendar and set WIKI_HOST / WIKI_TOKEN"
-	elog "before starting the service."
+	elog "Configure the token/host, then start the service:"
 	elog
-	elog "OpenRC:"
-	elog "  rc-update add wiki-calendar default"
-	elog "  rc-service wiki-calendar start"
+	elog "  OpenRC:  edit /etc/conf.d/wiki-calendar,"
+	elog "           rc-update add wiki-calendar default && rc-service wiki-calendar start"
 	elog
-	elog "systemd:"
-	elog "  systemctl edit wiki-calendar"
-	elog "  systemctl enable --now wiki-calendar"
+	elog "  systemd: edit /etc/wiki-calendar.env (EnvironmentFile),"
+	elog "           systemctl enable --now wiki-calendar"
+	elog
+	elog "Both config files are CONFIG_PROTECT'ed and survive upgrades."
 }

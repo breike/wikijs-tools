@@ -87,20 +87,19 @@ This installs:
 
 ### 2. Configure
 
-Edit the unit's environment (variables above):
+All settings live in `/etc/wiki-calendar.env` (read via `EnvironmentFile`).
+Edit it once:
 
 ```sh
-sudo systemctl edit wiki-calendar
+sudo nano /etc/wiki-calendar.env
+# set WIKI_HOST and WIKI_TOKEN, save
+sudo systemctl restart wiki-calendar
 ```
 
-```ini
-[Service]
-Environment=WIKI_HOST=https://wiki.example.com
-Environment=WIKI_TOKEN=PASTE_YOUR_TOKEN_HERE
-```
-
-Or edit `/usr/lib/systemd/system/wiki-calendar.service` directly (unit file is
-tracked-simple; an override via `systemctl edit` survives package upgrades).
+> The file is declared in `backup=()` of the PKGBUILD, so reinstalling or
+> upgrading the package **never overwrites your edits** — pacman keeps the
+> changed file and drops the new default next to it as
+> `/etc/wiki-calendar.env.pacnew`.
 
 ### 3. Enable and start
 
@@ -156,8 +155,8 @@ survive package upgrades.
 
 ### systemd (optional)
 
-The same variables live in the unit file — use `systemctl edit wiki-calendar`
-or edit `/usr/lib/systemd/system/wiki-calendar.service` directly:
+The same variables live in `/etc/wiki-calendar.env` (the unit reads it via
+`EnvironmentFile`). Edit the file, then:
 
 ```sh
 systemctl enable --now wiki-calendar

@@ -11,17 +11,10 @@ Type=simple
 # install.sh ставит туда же.
 ExecStart=/usr/bin/wiki-calendar
 
-# --- Переменные: отредактируй здесь ---
-Environment=WIKI_HOST=https://wiki.example.com
-Environment=WIKI_TOKEN=PASTE_YOUR_TOKEN_HERE
-# Как часто проверять (секунды); пишет только при изменении контента
-Environment=WIKI_REFRESH_INTERVAL_S=60
-# UUID сайта; если пусто — определяется из GET /_api/bootstrap
-Environment=WIKI_SITE_ID=
-# Локали по умолчанию; пусто = локали по умолчанию сайта
-Environment=WIKI_LOCALE=
-# Логировать действия (1/0)
-Environment=WIKI_VERBOSE=1
+# Переменные окружения — в /etc/wiki-calendar.env (редактируй там).
+# Файл объявлен в backup=() PKGBUILD: pacman не затирает его при
+# переустановке/обновлении, а правится один раз и не требует повторных правок.
+EnvironmentFile=/etc/wiki-calendar.env
 
 # Перезапуск при сбое, с задержкой
 Restart=on-failure
