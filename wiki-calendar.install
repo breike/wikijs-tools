@@ -1,0 +1,15 @@
+# wiki-calendar.install — post-install / pre/post-remove hooks.
+# Enables (and starts) the service on install, disables it on removal.
+
+post_install() {
+    systemctl daemon-reload
+    systemctl enable --now wiki-calendar.service
+}
+
+pre_remove() {
+    systemctl disable --now wiki-calendar.service 2>/dev/null || true
+}
+
+post_remove() {
+    systemctl daemon-reload
+}

@@ -7,8 +7,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 
-# Путь к собранному бинарнику (см. install.sh)
-ExecStart=/usr/local/bin/wiki-calendar
+# Бинарник из Arch-пакета (PKGBUILD) — /usr/bin/wiki-calendar;
+# install.sh ставит туда же.
+ExecStart=/usr/bin/wiki-calendar
 
 # --- Переменные: отредактируй здесь ---
 Environment=WIKI_HOST=https://wiki.example.com

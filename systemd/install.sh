@@ -13,7 +13,8 @@
 set -euo pipefail
 
 BIN_NAME="wiki-calendar"
-BIN_DEST="/usr/local/bin/${BIN_NAME}"
+# Тот же путь, что PKGBUILD/юнит: /usr/bin/wiki-calendar
+BIN_DEST="/usr/bin/${BIN_NAME}"
 UNIT_SRC="$(dirname "$0")/wiki-calendar.service"
 UNIT_DEST="/etc/systemd/system/${BIN_NAME}.service"
 
