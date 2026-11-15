@@ -28,9 +28,9 @@ grid `00:00`–`23:00` across Monday–Sunday.
 - **Links in the week column** — every week number in the yearly calendar links to its
   week page. The year in the link is the *ISO year*, so boundary weeks (e.g. the first
   January week that belongs to the previous ISO year) point at the right page.
-- **Idempotent** — only writes when the *content* actually changed (when "today" moves
-  or the highlight hour moves), so it does not spam page history with a new version
-  every minute.
+- **Idempotent** — only writes when something actually changed ("today" moves, the
+  highlight hour/day moves, or a week-page title still carries the old format), so it
+  does not spam page history with a new version every minute.
 - **Auto-rollover** — when the year changes, it starts maintaining `cal-<new-year>` and
   stops touching the old one automatically.
 - **Works in the background** — polls every `REFRESH_INTERVAL_S` seconds (60 by default),
@@ -38,7 +38,8 @@ grid `00:00`–`23:00` across Monday–Sunday.
 
 ## Configuration
 
-All settings are read from the environment (see the systemd unit):
+All settings are read from the environment. On systemd they live in
+`/etc/wiki-calendar.env` (see below), on OpenRC in `/etc/conf.d/wiki-calendar`:
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -81,9 +82,8 @@ makepkg -si
 This installs:
 
 - `/usr/bin/wiki-calendar` — the binary
-- `/usr/lib/systemd/system/wiki-calendar.service` — the systemd unit (if systemd is used)
-- `/etc/init.d/wiki-calendar` + `/etc/conf.d/wiki-calendar` — the OpenRC init script
-  and its configuration (on Gentoo, see below)
+- `/usr/lib/systemd/system/wiki-calendar.service` — the systemd unit
+- `/etc/wiki-calendar.env` — the configuration (`WIKI_*` variables; see below)
 
 ### 2. Configure
 
@@ -135,8 +135,11 @@ The ebuild installs:
 
 - `/usr/bin/wiki-calendar` — the binary
 - `/etc/init.d/wiki-calendar` — the OpenRC init script
-- `/etc/conf.d/wiki-calendar` — configuration (the `WIKI_*` variables from the table above)
-- `/usr/lib/systemd/system/wiki-calendar.service` — the systemd unit as well
+- `/etc/conf.d/wiki-calendar` — OpenRC configuration (the `WIKI_*` variables from the table above)
+- `/usr/lib/systemd/system/wiki-calendar.service` — the systemd unit
+- `/etc/wiki-calendar.env` — systemd configuration, also installed (same variables)
+
+Both config files are protected config: edits survive package upgrades.
 
 ### OpenRC (default on Gentoo)
 
